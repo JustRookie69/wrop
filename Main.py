@@ -1,38 +1,51 @@
 import whisper as wp
 from transformers import RagTokenizer, RagRetriever, RagSequenceForGeneration
-from datasets import load_dataset
-import logging
+from datasets import Dataset
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+# Load Whisper model
 model = wp.load_model("small")
+
+# Transcribe the audio
 audio_path = r"C:\projects\Wrop\test3.mp3"
 result = model.transcribe(audio_path)
 extracted_text = result.get('text', 'Error during STT conversion')
-with open("originalLangTranscript.txt", "w", encoding="utf-8" ) as f: f.write(extracted_text)
 
-def lang_identifier(result):
-    identified_Spoken_Language = result.get("language", None)
-    return identified_Spoken_Language
-
-identified_language = lang_identifier(result)
+# Identify the language
+identified_language = result.get("language", None)
 print(f"Language identified: {identified_language}")
 
+# Translate if not English
 if identified_language.lower() != "en":
-    new_result = model.transcribe(audio_path, task="translate")
-    new_text = new_result.get('text', "error durring stt conversion")
-    with open("EnglishTranslation.txt", "w", encoding="utf-8") as fe: fe.write(new_text)
+    translated_result = model.transcribe(audio_path, task="translate")
+    transcribed_text = translated_result.get('text', 'Error during translation')
+else:
+    transcribed_text = extracted_text
 
-tokenize = RagTokenizer.from_pretrained("facebook/rag-token-base")
-dataset = load_dataset("wiki_dpr", "psgs_w100.nq.exact", split="train", trust_remote_code=True)
-retriever = RagRetriever.from_pretrained("facebook/rag-sequence-nq", index_name="custom", indexed_dataset=dataset)
+# Save transcribed/translated text to file
+with open("englishTranslation.txt", "w", encoding="utf-8") as f: f.write(transcribed_text)
+
+# Dummy dataset for RAG
+dummy_data = {
+    "title": ["Sample Title 1", "Sample Title 2"],
+    "context": ["This is the context of the first document.", "This is the context of the second document."]
+}
+dummy_dataset = Dataset.from_dict(dummy_data)
+
+# Initialize RAG components
+tokenizer = RagTokenizer.from_pretrained("facebook/rag-token-base")
+retriever = RagRetriever.from_pretrained("facebook/rag-sequence-nq", index_name="custom", indexed_dataset=dummy_dataset)
 rag_model = RagSequenceForGeneration.from_pretrained("facebook/rag-token-base", retriever=retriever)
 
-with open("EnglishTranslation.txt", "r", encoding="utf-8") as fe: prompt = fe.read()
+# Tokenize the transcribed text
+inputs = tokenizer(transcribed_text, return_tensors='pt')
 
-input = tokenize(prompt, return_tensors='pt')
-output = rag_model.generate(**input)
-generated_output = tokenize.batch_decode(output, skip_special_tokens=True)[0]
+# Generate output based on the transcribed/translated text
+outputs = rag_model.generate(**inputs)
+generated_output = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
+
+# Save generated output to file
 with open("RAGoutput.txt", "w", encoding="utf-8") as fo: fo.write(generated_output)
-exit()
+
+
+
+
