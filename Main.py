@@ -1,6 +1,10 @@
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
 import whisper as wp
 from transformers import RagTokenizer, RagRetriever, RagSequenceForGeneration
 from datasets import Dataset
+import numpy as np
 
 # Load Whisper model
 model = wp.load_model("small")
@@ -22,14 +26,23 @@ else:
     transcribed_text = extracted_text
 
 # Save transcribed/translated text to file
-with open("englishTranslation.txt", "w", encoding="utf-8") as f: f.write(transcribed_text)
+with open("englishTranslation.txt", "w", encoding="utf-8") as f:
+    f.write(transcribed_text)
 
-# Dummy dataset for RAG
+# Dummy dataset with precomputed embeddings
 dummy_data = {
-    "title": ["Sample Title 1", "Sample Title 2"],
-    "context": ["This is the context of the first document.", "This is the context of the second document."]
+    "title": ["Document 1", "Document 2", "Document 3"],
+    "text": ["Translate to French", "Explain me the objective", "Give me ideal reply as assistant"],
+    "embeddings": [
+        np.random.rand(768).tolist(),  # Replace with actual embeddings for Document 1
+        np.random.rand(768).tolist(),  # Replace with actual embeddings for Document 2
+        np.random.rand(768).tolist()   # Replace with actual embeddings for Document 3
+    ]
 }
 dummy_dataset = Dataset.from_dict(dummy_data)
+
+# Add FAISS index
+dummy_dataset = dummy_dataset.add_faiss_index(column='embeddings')
 
 # Initialize RAG components
 tokenizer = RagTokenizer.from_pretrained("facebook/rag-token-base")
@@ -39,13 +52,15 @@ rag_model = RagSequenceForGeneration.from_pretrained("facebook/rag-token-base", 
 # Tokenize the transcribed text
 inputs = tokenizer(transcribed_text, return_tensors='pt')
 
+# Remove unused keys
+inputs = {k: v for k, v in inputs.items() if k in ["input_ids", "attention_mask"]}
+
 # Generate output based on the transcribed/translated text
 outputs = rag_model.generate(**inputs)
 generated_output = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
 
 # Save generated output to file
-with open("RAGoutput.txt", "w", encoding="utf-8") as fo: fo.write(generated_output)
+with open("RAGoutput.txt", "w", encoding="utf-8") as fo:
+    fo.write(generated_output)
 
-
-
-
+print("Process completed successfully.")
