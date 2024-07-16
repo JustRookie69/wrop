@@ -5,6 +5,8 @@ Make sure you have the necessary Python packages installed. You can install them
 bash
 Copy code
 pip install whisper transformers datasets faiss
+choco install ffmpeg
+
 2. Environment Setup
 Set the following environment variable to prevent certain library conflicts:
 
